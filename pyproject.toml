@@ -1,0 +1,20 @@
+[project]
+name = "news-process-exploration"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-community>=0.3.27",
+    "langchain-ollama>=0.3.4",
+    "langchain-postgres>=0.0.15",
+    "psycopg2-binary>=2.9.10",
+    "python-dotenv>=1.1.1",
+    "tqdm>=4.67.1",
+]
+
+[dependency-groups]
+dev = [
+    "memory-profiler>=0.61.0",
+    "pytest>=8.4.1",
+]
