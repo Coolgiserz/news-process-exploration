@@ -151,14 +151,30 @@ class SqlNewsRepository:  # noqa: D101  (docstring above)
             )
             return res.fetchall()
 
-    def update_abstracts(self, rows: Iterable[Tuple[int, str]]) -> None:
+    def update_abstracts(self, rows: Iterable[Tuple[int, str, list]]) -> None:
+        rows_with_keywords = []
+        rows_without_keywords = []
+        for r in rows:
+            if r[2]:  # keywords 非空
+                rows_with_keywords.append({"id": r[0], "summary": r[1], "keywords": json.dumps(r[2], ensure_ascii=False)})
+            else:
+                rows_without_keywords.append({"id": r[0], "summary": r[1]})
+
         with self.engine.begin() as conn:
-            conn.execute(
-                text(
-                    f"UPDATE {self.table_name} SET summary = :summary WHERE id = :id"
-                ),
-                [{"id": r[0], "summary": r[1]} for r in rows],
-            )
+            if rows_with_keywords:
+                conn.execute(
+                    text(
+                        f"UPDATE {self.table_name} SET summary = :summary, keywords = :keywords WHERE id = :id"
+                    ),
+                    rows_with_keywords,
+                )
+            if rows_without_keywords:
+                conn.execute(
+                    text(
+                        f"UPDATE {self.table_name} SET summary = :summary WHERE id = :id"
+                    ),
+                    rows_without_keywords,
+                )
 
     # --------- Dispose ---------
     def dispose(self) -> None:

@@ -39,7 +39,7 @@ ORDER_TS_COLUMN = os.getenv("ORDER_TS_COLUMN", "created_at")
 TEXT_COLUMN = os.getenv("TEXT_COLUMN", "text")
 ABSTRACT_COLUMN = os.getenv("ABSTRACT_COLUMN", "summary")
 
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "8"))
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "2"))
 MAX_ABSTRACT_CHARS = int(os.getenv("MAX_ABSTRACT_CHARS", "160"))
 
 
@@ -59,10 +59,12 @@ def main() -> None:
 
         # 生成摘要
         abstracts = []
+        keywords = []
         for content in tqdm.tqdm(texts):
-            abs_text = summarize(content, max_chars=MAX_ABSTRACT_CHARS)
-            abstracts.append(abs_text)
-        repo.update_abstracts(list(zip(ids, abstracts)))
+            result = summarize(content, max_chars=MAX_ABSTRACT_CHARS)
+            abstracts.append(result.summary if result else None)
+            keywords.append(result.keywords if result else [])
+        repo.update_abstracts(list(zip(ids, abstracts, keywords)))
         total += len(batch)
         cursor_ts = batch[-1][1]
         print(f"已生成摘要 {total} 条，最新时间戳 {cursor_ts}")

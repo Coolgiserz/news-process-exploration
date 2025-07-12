@@ -12,7 +12,7 @@ from typing import Dict, Optional
 
 from dotenv import load_dotenv
 from common.protocol import Processor, Context, register
-from algo.summarizers.summarizer_service import register_summarizer, AbstractSummarizer, LLMSummarizerImpl
+from algo.summarizers.summarizer_service import  AbstractSummarizer, LLMSummarizerImpl, SummaryResult
 
 load_dotenv()
 
@@ -24,7 +24,6 @@ def _get_llm_summarizer():
     return LLMSummarizerImpl(max_chars=DEFAULT_MAX_CHARS)
 
 @register
-@register_summarizer("llm")
 class LLMSummarizer(Processor, AbstractSummarizer):
     name = "summarizer_llm"
     version = "1.0.0"
@@ -32,6 +31,7 @@ class LLMSummarizer(Processor, AbstractSummarizer):
     provides = {"summary"}
 
     def __init__(self, max_chars: int = DEFAULT_MAX_CHARS, **cfg):
+        super().__init__(**cfg)
         self.max_chars = max_chars
         # cfg 可用于覆盖模型参数
         self.summarizer = _get_llm_summarizer()
@@ -42,15 +42,15 @@ class LLMSummarizer(Processor, AbstractSummarizer):
             result = self.summarizer.summarize(article, max_chars=self.max_chars)
         except Exception as e:  # noqa: BLE001
             ctx.logger.error("LLM summarizer error", exc_info=e)
-            raise
-        return {"summary": summary}
+            result = None
+        return {"summary": result}
 
-    def summarize(self, text: str, max_chars: int) -> str:  # type: ignore[override]
+    def summarize(self, text: str, max_chars: int) -> SummaryResult:  # type: ignore[override]
         return self.summarizer.summarize(text, max_chars)
 
 # 辅助函数：独立调用
 
-def summarize(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> Optional[str]:
+def summarize(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> Optional[SummaryResult]:
     try:
         return _get_llm_summarizer().summarize(text, max_chars)
     except Exception as e:
