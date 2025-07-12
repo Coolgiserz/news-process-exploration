@@ -22,6 +22,8 @@ from __future__ import annotations
 import os
 import tqdm
 from datetime import datetime
+import argparse
+import asyncio
 
 from dotenv import load_dotenv
 from repo import SqlNewsRepository
@@ -39,12 +41,27 @@ ORDER_TS_COLUMN = os.getenv("ORDER_TS_COLUMN", "created_at")
 TEXT_COLUMN = os.getenv("TEXT_COLUMN", "text")
 ABSTRACT_COLUMN = os.getenv("ABSTRACT_COLUMN", "summary")
 
-BATCH_SIZE = int(os.getenv("BATCH_SIZE", "2"))
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", "20"))
 MAX_ABSTRACT_CHARS = int(os.getenv("MAX_ABSTRACT_CHARS", "160"))
 
 
+def process_batch_sync(texts, max_chars, summarize_func):
+    abstracts = []
+    keywords = []
+    for content in tqdm.tqdm(texts):
+        result = summarize_func(content, max_chars=max_chars)
+        abstracts.append(result.summary if result else None)
+        keywords.append(result.keywords if result else [])
+    return abstracts, keywords
 
-def main() -> None:
+async def process_batch_async(texts, max_chars, summarize_func):
+    tasks = [summarize_func(content, max_chars=max_chars) for content in texts]
+    results = await asyncio.gather(*tasks)
+    abstracts = [r.summary if r else None for r in results]
+    keywords = [r.keywords if r else [] for r in results]
+    return abstracts, keywords
+
+def main_sync():
     repo = SqlNewsRepository(CONNECTION_STRING, table_name=TABLE_NAME, time_column=ORDER_TS_COLUMN)
     cursor_ts = datetime.min
     total = 0
@@ -58,12 +75,28 @@ def main() -> None:
         texts = [row[2] for row in batch]
 
         # 生成摘要
-        abstracts = []
-        keywords = []
-        for content in tqdm.tqdm(texts):
-            result = summarize(content, max_chars=MAX_ABSTRACT_CHARS)
-            abstracts.append(result.summary if result else None)
-            keywords.append(result.keywords if result else [])
+        abstracts, keywords = process_batch_sync(texts, MAX_ABSTRACT_CHARS, summarize)
+        repo.update_abstracts(list(zip(ids, abstracts, keywords)))
+        total += len(batch)
+        cursor_ts = batch[-1][1]
+        print(f"已生成摘要 {total} 条，最新时间戳 {cursor_ts}")
+
+
+async def main_async():
+    repo = SqlNewsRepository(CONNECTION_STRING, table_name=TABLE_NAME, time_column=ORDER_TS_COLUMN)
+    cursor_ts = datetime.min
+    total = 0
+    while True:
+        batch = repo.fetch_without_abstract(after_ts=cursor_ts, limit=BATCH_SIZE)
+        if not batch:
+            print("处理完成，无更多数据。")
+            break
+
+        ids = [row[0] for row in batch]
+        texts = [row[2] for row in batch]
+
+        # 生成摘要
+        abstracts, keywords = await process_batch_async(texts, MAX_ABSTRACT_CHARS, summarize)
         repo.update_abstracts(list(zip(ids, abstracts, keywords)))
         total += len(batch)
         cursor_ts = batch[-1][1]
@@ -71,4 +104,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--use_async", action="store_true", help="使用异步pipeline")
+    args = parser.parse_args()
+
+    if args.use_async:
+        asyncio.run(main_async())
+    else:
+        main_sync()

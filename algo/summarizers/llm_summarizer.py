@@ -4,7 +4,7 @@ from functools import lru_cache
 import os
 from dotenv import load_dotenv
 from langchain_ollama.chat_models import ChatOllama
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 
@@ -30,16 +30,25 @@ PROMPT_TMPL = """
 2. 避免使用“本文”“文章”等空洞前缀。
 3. 只写一句，不得分号、顿号并列多句。
 
-【新闻正文】:
-{article}
+
 【注意】
-1. 不得编造信息，必须严格按照原文内容进行摘要。
+1. 不得编造信息，必须严格按照原文内容进行摘要, 不要加正文里没有的内容。
 2. 提取关键词时需规避常见的广告、营销等干扰信息。
 【输出格式】
 {format_instructions}
 """
-
-
+@lru_cache(maxsize=1)
+def build_tongyi_chain():
+    from langchain_community.chat_models.tongyi import ChatTongyi
+    # prompt = PromptTemplate.from_template(PROMPT_TMPL)
+    prompt = ChatPromptTemplate.from_messages([
+                    ("system", PROMPT_TMPL),
+                    ("human", "【新闻正文】:{article}"),
+                ])
+    llm = ChatTongyi(model="qwen3-4b",  format="json", model_kwargs={"temperature": 0, "enable_thinking": False})
+    output_parser = PydanticOutputParser(pydantic_object=SummaryResult)
+    chain = prompt.partial(format_instructions=output_parser.get_format_instructions()) | llm | output_parser
+    return chain
 
 class LLMSummarizerImpl(AbstractSummarizer):
     def __init__(
@@ -66,7 +75,21 @@ class LLMSummarizerImpl(AbstractSummarizer):
         if max_chars is None:
             max_chars = self.max_chars
         try:
+            if not text:
+                return SummaryResult(summary="", keywords=[])
             result = self._chain.invoke({"article": text, "max_chars": max_chars})
+            # TODO 停用词，LLM输出关键词可能含有广告
+            return result
+        except Exception as e:
+            raise e
+
+    async def summarize_async(self, text: str, max_chars: int = None) -> SummaryResult:
+        if max_chars is None:
+            max_chars = self.max_chars
+        try:
+            if not text:
+                return SummaryResult(summary="", keywords=[])
+            result = await self._chain.ainvoke({"article": text, "max_chars": max_chars})
             # TODO 停用词，LLM输出关键词可能含有广告
             return result
         except Exception as e:
