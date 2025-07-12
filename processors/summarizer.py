@@ -12,7 +12,7 @@ from typing import Dict, Optional
 
 from dotenv import load_dotenv
 from common.protocol import Processor, Context, register
-from algo.summarizers.summarizer_service import  AbstractSummarizer, LLMSummarizerImpl, SummaryResult
+from algo.summarizers.llm_summarizer import  AbstractSummarizer, LLMSummarizerImpl, SummaryResult, build_tongyi_chain
 
 load_dotenv()
 
@@ -21,7 +21,7 @@ DEFAULT_MAX_CHARS = int(os.getenv("MAX_ABSTRACT_CHARS", "160"))
 # 单例 summarizer 实例
 @lru_cache(maxsize=1)
 def _get_llm_summarizer():
-    return LLMSummarizerImpl(max_chars=DEFAULT_MAX_CHARS)
+    return LLMSummarizerImpl(max_chars=DEFAULT_MAX_CHARS, chain=build_tongyi_chain())
 
 @register
 class LLMSummarizer(Processor, AbstractSummarizer):
@@ -47,6 +47,9 @@ class LLMSummarizer(Processor, AbstractSummarizer):
 
     def summarize(self, text: str, max_chars: int) -> SummaryResult:  # type: ignore[override]
         return self.summarizer.summarize(text, max_chars)
+
+    async def summarize_async(self, text: str, max_chars: int) -> SummaryResult:  # type: ignore[override]
+        return await self.summarizer.summarize_async(text, max_chars)
 
 # 辅助函数：独立调用
 
