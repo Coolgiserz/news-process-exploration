@@ -8,3 +8,12 @@
 .env.development
 .env.test
 .env.production
+__pycache__/
+node_modules/
+dist/
+build/
+*.log
+*.sqlite
+*.sqlite3
+*.sublime-project
+*.sublime-workspace
