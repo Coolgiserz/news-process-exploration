@@ -1,5 +1,5 @@
 """
-批量对已有 news 表的数据进行标题向量化回填。
+批量对已有 articles 表的数据进行标题向量化回填（新增字段）。
 
 使用方法：
 $ python backfill_embeddings.py
@@ -13,7 +13,7 @@ $ python backfill_embeddings.py
 运行前请先启动本地 Ollama 服务：
 $ ollama serve
 并保证模型 "bge-m3:567m" 已经被拉取：
-$ ollama run bge-m3:567m
+$ ollama pull bge-m3:567m
 """
 
 from __future__ import annotations
